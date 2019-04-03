@@ -1,0 +1,58 @@
+#!groovy
+
+pipeline {
+  agent none
+  options {
+    ansiColor('xterm')
+  }
+  stages {
+    stage('Build') {
+      agent {
+        docker {
+          image 'openjdk:12'
+          args '-v m2:/root/.m2'
+        }
+      }
+      stages {
+        stage('Compile') {
+          steps { sh './mvnw compile test-compile' }
+        }
+        stage('Test') {
+          steps { sh './mvnw verify' }
+        }
+        stage('Package') {
+          steps { sh './mvnw package -DskipTests' }
+        }
+      }
+    }
+    stage('Docker') {
+      agent any
+      steps {
+        script {
+          def image = docker.build("image")
+          // image.push()
+        }
+      }
+    }
+    stage('Deploy') {
+      when { branch 'master' }
+      agent {
+        docker {
+          image 'williamyeh/ansible:alpine3'
+          args '-u root'
+        }
+      }
+      steps {
+        ansiblePlaybook playbook: 'cicd/playbook.yaml', colorized: true
+      }
+    }
+  }
+  post {
+    success {
+      echo 'SUCCESS'
+    }
+    failure {
+      echo 'FAILURE'
+    }
+  }
+}
